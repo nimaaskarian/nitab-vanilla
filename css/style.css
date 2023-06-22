@@ -1,0 +1,39 @@
+@import "colors.css";
+
+body {
+  padding: 15px;
+  font-family: JetBrainsMono Nerd Font, monospace;
+  background-color: var(--background);
+}
+* {
+   box-sizing: border-box;
+ }
+
+#input, #history-container{
+  font-size: 16px;
+  color: var(--foreground);
+  background-color: transparent;
+}
+#input form{
+  display: flex;
+  flex-direction: row;
+  align-content: stretch;
+}
+#input #prompt-a {
+  padding-right: 5px;
+}
+#input input{
+  background-color: inherit;
+  color: inherit;
+  font-family: inherit;
+  font-size: inherit;
+  box-shadow: none;
+  border: none;
+  outline: none !important;
+  -webkit-appearance: none;
+  flex: 1;
+}
+#input input::selection {
+  color: var(--background);
+  background-color: var(--foreground);
+}
