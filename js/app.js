@@ -5,6 +5,7 @@ const promptA = document.querySelector("#input #prompt-a");
 const SPACE = encodeURI(" ");
 
 let aliases = {};
+let functions = {};
 let $ = {
   NAME: "name",
   HOSTNAME: "hostname",
@@ -13,24 +14,42 @@ let binaries = {
   alias: (arguments)=> {
     arguments.forEach(arg => {
       const [ aliasName, ...aliasUrl] = arg.split("=");
-      aliases[aliasName] = aliasUrl.join("=").replace(/"/g, "");
+      aliases[aliasName] = aliasUrl.join("=");
     });
+  },
+  function: (arguments, lines)=>{
+    const name = arguments[0].split("(")[0]
+    functions[name] = (args)=>{
+      return lines.map(e=>{
+        const argIndex = e.search(/\$\d/);
+        e = e.replace(/\$@/,args.join(SPACE));
+
+        if (argIndex !== -1) {
+          return e.replace(/\$\d/g, args[e[argIndex+1]-1]||"");
+        }
+
+        return e;
+      })
+    }
   },
   clear: ()=>{
     historyContainer.innerHTML = "";
   },
   go: (arguments)=>{
+    const {nonOptions, options} = getopt(arguments, ":oa:e");
     let output = [];
-    arguments.forEach(arg => {
-      output.push(convertUrl(arg));
+    nonOptions.forEach(arg => {
+      const url = arg+( options.a||"" );
+      if (options.e)
+        output.push(url);
+      else
+        output.push(convertUrl(url));
     });
-    if (output.length > 1)
+    if (output.length > 1 || options.o) {
       output.forEach(url => {
         open(url);
       });
-    
-    if (arguments.includes("-o"))
-      open(output[0])
+    }
     else
       window.location.href = output[0];
   },
@@ -52,41 +71,61 @@ formElement.addEventListener("submit",(ev)=>{
   historyElement.innerHTML = "$ " + inputElement.value;
   historyContainer.appendChild(historyElement);
 
-  const runOutput = readAndRunLine(inputElement.value);
+  const runOutput = readAndRunLine({lineString: inputElement.value});
   console.log(runOutput)
   
-  if (!runOutput)
-    binaries.echo("nitab: command not found: "+inputElement.value)
-
   inputElement.value = "";
   // window.open()
 })
 
 // read config file
 async function main() {
-  const configText = await fetch(".nitabrc").then(r=>r.text());
-  configText.split("\n").forEach(line => {
-    readAndRunLine(line.trim());
-  });
-  console.log($);
-  console.log(aliases);
+  const configTextLines = (await fetch(".nitabrc").then(r=>r.text())).split('\n');
+  let object = {
+    lineIndex: 0,
+    allLines: configTextLines,
+  }
+  for (; object.lineIndex < configTextLines.length; object.lineIndex++) {
+    readAndRunLine(object);
+  }
   promptA.innerHTML = `[${$.NAME}@${$.HOSTNAME} ~]$ `;
 }
 
-function readAndRunLine(line) {
+function readAndRunLine(obj) {
 
+  const line = obj.lineString||obj.allLines[obj.lineIndex];
   const [cmd ,...args] = splitArguments(line);
+
   if (binaries[cmd]) {
+    if (cmd === "function"){
+      const lines = [];
+      let currentLine;
+      do {
+        currentLine = obj.allLines[++obj.lineIndex];
+        if (!currentLine.includes("}"))
+          lines.push(currentLine.trim());
+      }
+      while (!currentLine.includes("}"))
+      return binaries[cmd](args,lines)||true;
+    }
     return binaries[cmd](args)||true;
   }
   if (aliases[cmd]) {
-    return parseAlias(aliases[cmd],args);
+    return parseAlias(aliases[cmd],args)||true;
+  }
+  if (functions[cmd]) {
+    functions[cmd](args).forEach(line => {
+      parseAlias(line,[]);
+    });
+    return true;
   }
 
   if (line.split("=").length == 2) {
     const [variableName, ...variableContent] = line.split("=");
-    return $[variableName] = variableContent.join("=").replace(/"/g, "");
+    return $[variableName] = variableContent.join("=");
   }
+  if (cmd)
+    binaries.echo("nitab: command not found: "+cmd)
 }
 
 function parseAlias(alias,args) {
@@ -116,8 +155,11 @@ function splitArguments(line) {
     }
     nextQuote = line.substring(firstQuote+1).search(/(?<!\\)"/)+firstQuote+1;
     if (firstSpace > firstQuote && firstSpace < nextQuote) {
-      arguments.push(line.substring(0,nextQuote+1))
-      line=line.substring(nextQuote+1)
+      if (firstQuote === 0)
+        arguments.push(line.substring(1,nextQuote))
+      else 
+        arguments.push(line.substring(0,nextQuote))
+      line=line.substring(nextQuote+2)
       continue;
     }
     if (firstSpace > 0) {
@@ -134,28 +176,19 @@ function splitArguments(line) {
 
   }
   while (line.length);
-  return arguments;
-}
-
-// convert url to standars
-function convertUrl(url){
-  if (
-    !url.match(/^http[s]?:\/\//i) &&
-    !url.match(/^((..?)?\/)+.*/i)
-  ) {
-    return "http://" + url;
-  }
-  return url;
-}
-
-function getopt(args, optstring) {
-  let optname, optarg;
-  optstring.forEach(optchar => {
-    if (optchar !== ':')
-      optname = optchar;
-
-    if (!optname)
+  return arguments.map(arg=>{
+    return arg.replace(/(?<!\\)"/g,"").replace(/(?<!\\)\\/g,"").replace(/\\+/g,"\\")
   });
 }
+
+// function getopt(args, optstring) {
+//   let optname, optarg;
+//   optstring.forEach(optchar => {
+//     if (optchar !== ':')
+//       optname = optchar;
+
+//     if (!optname)
+//   });
+// }
 
 main();
