@@ -1,8 +1,22 @@
-alias yt="go youtube.com?search_query= -a"
-alias g="go google.com/search?q= -a"
+alias yt="go youtube.com/results?search_query= -a"
+function g() {
+    go "google.com/search?q=$@"
+}
+function gOrGo(){
+  if [isUrl $@] then;
+    go "$@"
+  else
+    g $@
+  fi
+}
+alias git="go github.com/ -a"
+function mygit() {
+  if [$@] then;
+    git nimaaskarian/$@
+  else
+    git
+  fi
+}
 NAME=nima
 HOSTNAME=nimas-pc
-function z(){
-  go youtube.com/$@ -o
-  go reddit.com/$1 -o
-}
+DEFAULT=gOrGo

@@ -1,0 +1,14 @@
+{
+  "manifest_version": 2,
+  "name": "Nitab Vanilla",
+  "version": "0.1.0",
+  "description": "A newtab extension inspired by posix shells.",
+  "chrome_url_overrides": {
+    "newtab": "focus.html"
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "test@gmail.com"
+    }
+  }
+}

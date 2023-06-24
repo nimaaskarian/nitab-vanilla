@@ -17,18 +17,47 @@ let binaries = {
       aliases[aliasName] = aliasUrl.join("=");
     });
   },
+  isUrl: (arguments)=> {
+    return isUrl(arguments.join(" "))
+  },
   function: (arguments, lines)=>{
     const name = arguments[0].split("(")[0]
+    let isIf,ifCondition = "";
+    let isElse;
     functions[name] = (args)=>{
-      return lines.map(e=>{
+      return lines.forEach(e=>{
         const argIndex = e.search(/\$\d/);
-        e = e.replace(/\$@/,args.join(SPACE));
+        e = e.replace(/\$@/,args.join(" "));
+        [cmd] = splitArguments(e);
+        console.log(cmd)
+        if (cmd === "if") {
+          isIf = true;
+          ifCondition = e.substring(e.indexOf("[")+1, e.indexOf("]")).trim();
+          [ifCmd,...ifArgs] = splitArguments(ifCondition);
+          if (binaries[ifCmd]) {
+            ifCondition = binaries[ifCmd](args);
+          }
+          return; 
+        }
+        if (cmd === "fi" && (isIf || isElse)) {
+          isIf = false;
+          isElse = false;
+          ifCondition = "";
+          return; 
+        }       
+        if (cmd === "else" && isIf) {
+          isElse = true;
+          isIf = false;
+          return; 
+        }        
+        if (isElse && ifCondition) return;
+        if (isIf && !ifCondition) return ;
 
         if (argIndex !== -1) {
-          return e.replace(/\$\d/g, args[e[argIndex+1]-1]||"");
+          e = e.replace(/\$\d/g, args[e[argIndex+1]-1]||"");
         }
 
-        return e;
+        readAndRunLine({lineString: e});
       })
     }
   },
@@ -92,8 +121,10 @@ async function main() {
 }
 
 function readAndRunLine(obj) {
-
   const line = obj.lineString||obj.allLines[obj.lineIndex];
+  // # is comment
+  if (line.startsWith("#")) return;
+
   const [cmd ,...args] = splitArguments(line);
 
   if (binaries[cmd]) {
@@ -102,6 +133,8 @@ function readAndRunLine(obj) {
       let currentLine;
       do {
         currentLine = obj.allLines[++obj.lineIndex];
+        if (currentLine.trim().startsWith("#")) continue;
+
         if (!currentLine.includes("}"))
           lines.push(currentLine.trim());
       }
@@ -114,9 +147,7 @@ function readAndRunLine(obj) {
     return parseAlias(aliases[cmd],args)||true;
   }
   if (functions[cmd]) {
-    functions[cmd](args).forEach(line => {
-      parseAlias(line,[]);
-    });
+    functions[cmd](args);
     return true;
   }
 
@@ -125,7 +156,7 @@ function readAndRunLine(obj) {
     return $[variableName] = variableContent.join("=");
   }
   if (cmd)
-    binaries.echo("nitab: command not found: "+cmd)
+    readAndRunLine({lineString: $.DEFAULT?[ $.DEFAULT,cmd,...args ].join(" "):"echo nitab: command not found "+cmd})
 }
 
 function parseAlias(alias,args) {
@@ -135,11 +166,11 @@ function parseAlias(alias,args) {
   }
   if (aliases[cmd]) {
     if (args.length)
-      return parseAlias(aliases[cmd],innerArgs)+SPACE+args.join(SPACE);
+      return parseAlias(aliases[cmd],innerArgs)+" "+args.join(" ");
     
     return parseAlias(aliases[cmd], innerArgs)
   }
-  return [cmd, ...innerArgs].join(SPACE)+args.join(SPACE);
+  return [cmd, ...innerArgs].join(" ")+args.join(" ");
 }
 
 function splitArguments(line) {
